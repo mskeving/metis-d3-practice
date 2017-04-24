@@ -1,0 +1,135 @@
+<doctype !html>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+
+<style type="text/css">
+  svg {
+    border:1px solid #d0d0d0;
+  }
+
+  .axis path, .axis line {
+    fill: #888;
+  }
+
+  path.line {
+    fill: none;
+  }
+
+  .gens text {
+    font-size: 12px;
+  }
+
+</style>
+
+<body></body>
+
+<script>
+  var margin = {top: 20, right: 10, bottom: 30, left: 10};
+  var width = 80 - margin.left - margin.right;
+  var height = 300 - margin.top - margin.bottom;
+
+  var svg = d3.select('body')
+    .append('svg')
+    .attr('width', width + margin.right + margin.left)
+    .attr('height', height + margin.top + margin.bottom)
+    .append('g')
+        .attr('transform', 'translate(' + [margin.left, margin.top] + ')')
+
+  d3.csv('incomes.csv', function(err, data) {
+    var compareCountries = ["United Kingdom", "Norway", "Germany", "Canada", "Netherlands", "France", "Sweden", "Ireland", "Spain"];
+
+    var filteredData = data.filter(function(d) {
+      // filter to get only countries in compareCountries
+      return compareCountries.indexOf(d.country) > -1 && d.cutoff == 'cop50';
+    })
+
+    filteredData.forEach(function(d) {
+      d.val = +d.val;
+      d.year = +d.year;
+    });
+
+    var americaData = data.filter(function(d) {
+      return d.country === "United States" && d.cutoff == "cop50";
+    })
+
+    var IncomeByCountry = d3.nest()
+      .key(function(d) { return d.country })
+      .entries(filteredData);
+
+    var yScale = d3.scaleLinear()
+      .range([height, 0])
+      // give padding so it doesn't look like we're starting from 0.
+      .domain(
+        [d3.min(filteredData, function(d) { return d.val}) - 5000,
+        d3.max(filteredData, function(d) { return d.val}) + 5000
+        ]
+      )
+
+    var xScale = d3.scaleLinear()
+      .range([0, width])
+      .domain(d3.extent(filteredData, function(d) {
+        return d.year;
+      }))
+
+    var yAxis = d3.axisLeft()
+      .scale(yScale)
+      .tickFormat(d3.format('$,'));
+
+
+    var xAxis = d3.axisBottom()
+      .tickFormat(d3.format(''))
+      .scale(xScale);
+
+    svg.append('g')
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis);
+
+    svg.append('g')
+      .call(yAxis);
+
+    var line = d3.line()
+      .x(function(d) { return xScale(d.year) })
+      .y(function(d) { return yScale(d.val) })
+
+
+    console.log(IncomeByCountry);
+
+    var countries = svg.selectAll('.country')
+      .data(IncomeByCountry)
+      .enter().append('g')
+      .attr('transform', function(d, i) {
+        return 'translate(' + (i * width) + ',0)'
+      })
+
+    countries.append('g')
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis);
+
+    countries.filter(function(d, i) { return i === 0 })
+      .append('g')
+      .call(yAxis);
+
+    countries.selectAll('path')
+      .data(function(d) {
+        return [americaData, d.values]
+      })
+      .enter().append('path')
+      .attr('d', line)
+      .attr('fill', 'none')
+      .attr('stroke', 'gray');
+
+
+    // svg.selectAll('path')
+    //   .data(IncomeByCountry)
+    //   .enter().append('path')
+    //   .attr('d', function(d) { return line(d.values) })
+    //   .attr('fill', 'none')
+    //   .attr('stroke', function(d) {
+    //     return d.key === "United States" ? 'steelblue' : 'gray';
+    //   })
+    //   .attr('stroke-width', function(d) {
+    //     return d.key === "United States" ? 3 : 1;
+    //   })
+  })
+
+
+</script>

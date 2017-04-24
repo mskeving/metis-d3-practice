@@ -1,0 +1,119 @@
+<doctype !html>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+
+<style type="text/css">
+  svg {
+    border:1px solid #d0d0d0;
+  }
+
+  .axis path, .axis line {
+    fill: #888;
+  }
+
+  path.line {
+    fill: none;
+  }
+
+  .gens text {
+    font-size: 12px;
+  }
+
+</style>
+
+<body></body>
+
+<script>
+  // properties
+  var margin = {top: 20, right: 20, bottom: 30, left: 40};
+  var width = 800 - margin.left - margin.right;
+  var height = 600 - margin.top - margin.bottom;
+
+  var yScale = d3.scaleLinear();
+  var xScale = d3.scaleLinear();
+  var color = d3.scaleOrdinal(d3.schemeCategory20b);
+
+  var line = d3.line()
+    .x(function(d) { return xScale(d.year); })
+    .y(function(d) { return yScale(d.yield); });
+
+  d3.csv('barleyfull.csv', function(err, data) {
+    if (err) { throw(err) }
+
+    data.forEach(function(d) {
+      d.yield = +d.yield
+      d.year = +d.year
+    });
+
+    var nested = d3.nest()
+      .key(function(d) {return d.site; })
+      .key(function(d) {return d.gen; })
+      .entries(data);
+
+    var site = nested[2];
+
+    yScale
+      .range([height, 0])
+      .domain([0, d3.max(data, function(d) { return d.yield })]);
+
+    xScale
+      .range([0, width])
+      .domain([1927, 1936]);
+
+    var yaxis = d3.axisLeft()
+      .scale(yScale)
+      .tickFormat(d3.format('$,'));
+
+    var xaxis = d3.axisBottom()
+      .tickFormat(d3.format(''))
+      .scale(xScale);
+
+    var chart = d3.select('body')
+      .append('div')
+      .datum(site);
+
+    chart.append('h2')
+      .text(function(d) { return d.key; })
+
+    var svg = chart.append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+        .attr('transform', 'translate(' + [margin.left, margin.top] + ')')
+
+    svg.append('g')
+      .call(yaxis);
+
+    svg.append('g')
+      .attr("transform", "translate(0," + height + ")")
+      .call(xaxis);
+
+    var gens = svg.selectAll("g.sites")
+      .data(function(d) { return d.values; })
+      .enter().append("g")
+      .attr("class", function(d) { return d.key; })
+
+    // gens.selectAll("circle")
+    //   .data(function(d) { return d.values; })
+    //   .enter().append("circle")
+    //   .attr("r", 3)
+    //   .attr("cy", function(d) { return yScale(d.yield); })
+    //   .attr("cx", function(d) { return xScale(d.year); })
+    //   .attr('fill', function(d) { return color(d.gen); })
+
+    gens.append('path')
+      .attr('class', 'line')
+      .attr('d', function(d) { return line(d.values); })
+      .attr('stroke', function(d) { return color(d.key); } )
+
+    gens.append('text')
+      .attr('x', function(d) { return xScale(d.values[d.values.length-1].year); })
+      // gets y position of last value
+      .attr('y', function(d) { return yScale(d.values[d.values.length-1].yield); })
+      .text(function(d) {return d.key; })
+
+
+    console.log(nested);
+
+  })
+
+</script>

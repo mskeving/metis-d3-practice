@@ -1,0 +1,99 @@
+<doctype !html>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+
+<style type="text/css">
+  svg {
+    border:1px solid #d0d0d0;
+  }
+
+</style>
+
+<body></body>
+
+<script>
+  // properties
+  var margin = {top: 20, right: 20, bottom: 30, left: 90};
+  var width = 800 - margin.left - margin.right;
+  var height = 600 - margin.top - margin.bottom;
+
+  var yScale = d3.scaleLinear();
+  var xScale = d3.scaleLinear();
+  var radius = d3.scaleSqrt();
+  var color = d3.scaleOrdinal(d3.schemeCategory20b);
+
+  d3.csv('barleyfull.csv', function(err, data) {
+    if (err) { throw(err) }
+
+    data.forEach(function(d) {
+      d.yield = +d.yield
+      d.year = +d.year
+    });
+
+    var nested = d3.nest()
+      .key(function(d) {return d.site; })
+      .key(function(d) {return d.gen; })
+      .entries(data);
+
+    var site = nested[3];
+
+    yScale
+      .range([height, 0])
+      .domain([0, d3.max(data, function(d) { return d.yield })])
+      .round(true);
+
+    xScale
+      .range([0, width])
+      .domain([1927, 1936]);
+
+    radius
+      .range([0, 15])
+      .domain([0, d3.max(data, function(d) { return d.yield })])
+
+    var yaxis = d3.axisLeft()
+      .scale(yScale);
+
+    var xaxis = d3.axisBottom()
+      .tickFormat(function(d) { return d; })
+      .scale(xScale);
+
+    var chart = d3.select('body')
+      .append('div')
+      .datum(site);
+
+    chart.append('h2')
+      .text(function(d) { return d.key; })
+
+    var svg = chart.append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+        .attr('transform', 'translate(' + [margin.left, margin.top] + ')')
+
+    svg.append('g')
+      .call(yaxis);
+
+    svg.append('g')
+      .attr("transform", "translate(0," + height + ")")
+      .call(xaxis);
+
+    var gens = svg.selectAll("g.sites")
+      .data(function(d) { return d.values; })
+      .enter().append("g")
+      .attr("class", function(d) { return d.key; })
+      .attr("transform", function(d) {
+        return "translate(0," + yScale(d.key) + ")"
+      });
+
+    gens.selectAll("circle")
+      .data(function(d) { return d.values; })
+      .enter().append("circle")
+      .attr("r", function(d) { return radius(d.yield); })
+      .attr("cy", 0)
+      .attr("cx", function(d) { return xScale(d.year); })
+      .attr('fill', function(d) { return color(d.gen); })
+
+    console.log(nested);
+
+  })
+
+</script>

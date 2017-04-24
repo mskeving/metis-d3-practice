@@ -1,0 +1,116 @@
+<doctype !html>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+
+<style type="text/css">
+  /*css to go here*/
+  svg {
+    border:1px solid #f0f;
+  }
+
+</style>
+
+<body></body>
+
+<script>
+  // properties
+  var margin = {top: 20, right: 20, bottom: 20, left: 20};
+  var width = 800 - margin.left - margin.right;
+  var height = 600 - margin.top - margin.bottom;
+
+  var svg = d3.select('body').append('svg')
+    .attr('width', width + margin.left + margin.right)
+    .attr('height', height + margin.top + margin.bottom)
+    .append('g')
+      .attr('transform', 'translate(' + [margin.left, margin.top] + ')')
+
+  var data;
+  var xScale = d3.scaleBand();
+  var yScale = d3.scaleLinear();
+  var colorScale = d3.scaleOrdinal(d3.schemeCategory20);
+  var duration = 1500;
+  var year = 1927;
+
+  function update() {
+    filteredData = data.filter(function(d) {
+      return d.year === year;
+    })
+
+    var circles = svg.selectAll('circle')
+      .data(filteredData, function(d) {
+        return d.gen + d.site;
+      })
+
+    // circles is now whatever .data() returns
+    // give us the exit selection, and remove all of it
+    var exit = circles
+      .exit()
+      .transition().duration(duration)
+      .attr('r', 0)
+      .remove();
+
+    // create the enter selection
+    // don't need this because we're entering below
+    // but would separate this out if you want the enter elements
+    // to behave differently
+    // var enter = circles.enter().append('circle');
+
+    // add enter + update selections together & set attrs
+    circles = circles
+        .enter().append('circle')
+        // makes circles come from top instead of 0,0
+        .attr('cx', function(d) {
+          return xScale(d.site);
+        })
+        .attr('r', 40)
+      .merge(circles)
+        .transition().duration(duration)
+        .delay(function(d, i) {return i * 100}) // makes left column come in first
+        .attr('r', 10)
+        .attr('cy', function(d) {
+          return yScale(d.yield);
+        })
+        .attr('cx', function(d) {
+          return xScale(d.site);
+        })
+        .attr('fill', function(d) {
+          return colorScale(d.gen);
+        })
+  }
+
+  // setInterval(function() {
+  //   year += 1;
+  //   if (year > 1936) {
+  //     year = 1927;
+  //   }
+  //   update();
+  // }, duration);
+
+
+  d3.csv('barleyfull.csv', function(err, response) {
+    if (err) { throw(err)};
+
+    response.forEach(function(d) {
+      d['yield'] = +d.yield
+      d['year'] = +d.year
+    });
+
+    var minMaxY = d3.extent(response, function(d) {
+      return d.yield;
+    })
+
+    yScale.domain(minMaxY)
+      .range([height, 0]);
+
+    var xDomain = response.map(function(d) {
+      return d.site
+    });
+    xScale.domain(xDomain)
+      .rangeRound([0, width]);
+
+    var colorScale = d3.scaleOrdinal(d3.schemeCategory20)
+
+    data = response
+
+  })
+
+</script>
