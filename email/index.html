@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<style type="text/css">
+
+  body {
+    font-family: arial, sans;
+    font-size: 14px;
+    margin: 30px auto;
+  }
+  svg {
+    overflow: visible;
+  }
+
+  .tooltip {
+    background-color: #f7f7f7;
+    padding: 3px 12px;
+    font-family: sans-serif;
+    border: 1px solid #bbbbbb;
+    box-shadow: 1px 1px 4px #bbbbbb;
+  }
+  .tooltip_title {
+    font-weight: bold;
+    font-size: 14px;
+    max-width: 300px;
+    word-wrap: normal;
+  }
+  .tooltip_body {
+    font-weight: normal;
+  }
+
+  .title {
+    font-size: 36;
+    font-weight: bold;
+  }
+
+</style>
+
+<body>
+
+</body>
+
+<script src="http://d3js.org/d3.v4.js" charset="utf-8"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script src='https://cdn.jsdelivr.net/lodash/4.17.2/lodash.min.js'></script>
+
+
+
+<script type="text/javascript">
+
+// There are many abbreviations for each time zone.
+// I took only one as a reference.
+var tzToAbbrv = {
+  '0': 'UTC',
+  '+1': 'CET',
+  '+2': 'CAT',
+  '+3': 'TRT',
+  '+3.5': 'IRST',
+  '+4': 'GST',
+  '+4.5': 'AFT',
+  '+5': 'PKT',
+  '+5.5': 'IST',
+  '+5.75': 'NPT',
+  '+6': 'BST',
+  '+6.5': 'CCT',
+  '+7': 'THA',
+  '+8': 'MYT',
+  '+9': 'JST',
+  '+9.5': 'ACST',
+  '+10': 'PGT',
+  '+11': 'NCT',
+  '+12': 'NZST',
+  '+12.75': 'CHAST',
+  '+13': 'TOT',
+  '+14': 'LINT',
+  '-1': 'CVT',
+  '-2': 'FNT',
+  '-2.5': 'NDT',
+  '-3': 'ADT',
+  '-3.5': 'NST',
+  '-4': 'AMT',
+  '-5': 'EST',
+  '-6': 'CST',
+  '-7': 'MST',
+  '-8': 'PST',
+  '-9': 'GIT',
+  '-9.5': 'MIT',
+  '-10': 'CKT',
+  '-11': 'SST',
+  '-12': 'BIT',
+}
+
+var getTimeZone = function(name) {
+  return name.replace(/[A-Za-z ]/g, "")
+}
+
+var map_margin = {top: 110, right: 70, bottom: 30, left: 20};
+var map_width = 800 - map_margin.left - map_margin.right;
+var map_height = 400 - map_margin.top - map_margin.bottom;
+
+var bar_margin = {top: 30, right: 40, bottom: 30, left: 50};
+var bar_width = 550 - bar_margin.left - bar_margin.right;
+var bar_height = 400 - bar_margin.top - bar_margin.bottom;
+
+
+var color = d3.scaleSequential(function(t) {
+  t += .1; // darken the base color a tad.
+  return d3.interpolateBlues(t);
+});
+
+// set the ranges for bar chart
+var x = d3.scaleBand()
+          .range([0, bar_width])
+          .padding(0.1);
+var y = d3.scaleSqrt()
+          .range([bar_height, 0]);
+
+var title = d3.select("body")
+  .append("div")
+  .attr("class", "title")
+  .style("font-size", "41px")
+  .style("font-weight", "bold")
+  .style("margin", "0 0 50px 72px")
+  .text("Emails by Timezone")
+
+var bar_svg = d3.select("body").append("svg")
+    .attr('width', bar_width + bar_margin.left + bar_margin.right)
+    .attr('height', bar_height + bar_margin.top + bar_margin.bottom)
+    .append('g')
+      .attr('transform', 'translate(' + [bar_margin.left, bar_margin.top] + ')')
+      .classed("original", true)
+
+var map_svg = d3.select("body").append("svg")
+    .attr('width', map_width + map_margin.left + map_margin.right)
+    .attr('height', map_height + map_margin.top + map_margin.bottom)
+    .append('g')
+      .attr('transform', 'translate(' + [map_margin.left, map_margin.top] + ')')
+      .classed("original", true)
+
+var tooltip = d3.select("body")
+    .append("div")
+    .attr("class", "tooltip")
+    .style("position", "absolute")
+    .style("z-index", "10")
+    .style("visibility", "hidden");
+
+var projection = d3.geoMercator()
+  .scale(135) // to make map fit inside svg.
+  .translate([400, 200]) // move up, right, down, or left
+
+var path = d3.geoPath()
+  .projection(projection);
+
+var dispatch = d3.dispatch('tzchange', 'leave');
+
+d3.queue()
+    .defer(d3.json, "tz_data.json")
+    .defer(d3.csv, "email_data.csv")
+    .await(ready);
+
+function ready(error, world, data) {
+  if (error) return console.warn(error);
+
+  // format email data into tz to count obj
+  var data_obj = {};
+  data.forEach(function(d) {
+    d.count = +d.count;
+    data_obj[d.tz] = +d.count
+  })
+  _.sortBy(data_obj, function(d) {
+    return d.tz;
+  })
+
+
+  // Scale the range of the data in the domains
+  x.domain(data.map(function(d) { return d.tz; }));
+  y.domain([0.5, d3.max(data, function(d) { return d.count; })]);
+  color.domain([0, d3.max(data, function(d) { return +d.count; })]);
+
+  var world_data = topojson.feature(world, world.objects.timezones).features
+
+  // add bar chart
+  bar_svg .append("g")
+    .attr('width', bar_width)
+    .attr('height', bar_height)
+    .selectAll(".bar")
+        .data(data)
+      .enter().append("rect")
+        .attr("class", function(d) {
+          abbrev = tzToAbbrv[d.tz];
+          return "bar " + abbrev;
+        })
+        .attr("x", function(d) { return x(d.tz); })
+        .attr("width", x.bandwidth())
+        .attr("y", function(d) { return y(d.count); })
+        .attr("height", function(d) { return bar_height - y(d.count); })
+        .style("fill", function(d) { return color(d.count); })
+      .on("mouseover", function(d) {
+        var tz = getTimeZone(d.tz);
+        var count = data_obj[tz] || 0;
+        dispatch.call('tzchange', this, tz, count);
+      })
+      .on("mousemove", function() {
+        return tooltip.style("top", (d3.event.pageY-52) + "px").style("left", (d3.event.pageX+18) + "px");
+      })
+      .on("mouseout", function() {
+        dispatch.call('leave', this, world_data, data_obj)
+      });
+
+  // add the x Axis
+  bar_svg.append("g")
+      .attr("transform", "translate(0," + bar_height + ")")
+      .call(d3.axisBottom(x))
+      .classed('x-axis', true);
+
+  // add the y Axis
+  bar_svg.append("g")
+      // .call(d3.axisLeft(y).ticks(4, ".0s"))
+      .call(d3.axisLeft(y))
+      .classed('y-axis', true);
+
+  // add world map with mouse events
+  map_svg.append("g")
+      .attr("class", "world")
+      .attr('width', map_width)
+    .selectAll("path")
+      .data(world_data)
+    .enter().append("path")
+      .attr("class", function(d) {
+        tz = getTimeZone(d.properties.Name);
+        abbrev = tzToAbbrv[tz];
+        return "country " + abbrev;
+      })
+      .attr("d", path)
+      .style("fill", function(d, i) {
+        var tz = getTimeZone(d.properties.Name),
+            count = data_obj[tz] || 0;
+        return color(count);
+      })
+    .on("mouseover", function(d) {
+      var tz = getTimeZone(d.properties.Name),
+          email_count = data_obj[tz] || 0;
+      dispatch.call('tzchange', this, tz, email_count);
+     })
+     .on("mousemove", function() {
+       return tooltip.style("top", (d3.event.pageY-52) + "px").style("left", (d3.event.pageX+18) + "px");
+     })
+     .on("mouseout", function(d) {
+       dispatch.call('leave', this, d, data_obj)
+     });
+}
+
+
+dispatch.on('leave', function(data, data_obj) {
+  d3.selectAll('.country').style('opacity', 1)
+    .style('fill', function(d) {
+      var tz = getTimeZone(d.properties.Name),
+          count = data_obj[tz] || 0;
+      return color(count)
+    });
+  d3.selectAll('.bar').style('opacity', 1)
+    .style('fill', function(d) {
+      return color(d.count)
+    });
+  return tooltip.style("visibility", "hidden");
+})
+
+dispatch.on('tzchange', function(tz, count) {
+  var abbrev = tzToAbbrv[tz];
+  // decrease opacity for all non-selected timezones
+  d3.selectAll('.country').style('opacity', .2)
+    .style('fill', color(0));
+  d3.selectAll('.bar').style('opacity', .2)
+    .style('fill', color(0));
+  d3.selectAll('.' + abbrev).style('opacity', 1)
+    .style('fill', color(count));
+
+  tooltip.html("")
+    .append("pre").attr("class", "tooltip_body")
+    .text("Emails from " + tzToAbbrv[tz] + " " + tz + ": " + count);
+
+  return tooltip.style("visibility", "visible");
+})
+
+</script>
